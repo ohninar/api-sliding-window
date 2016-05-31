@@ -3,13 +3,15 @@ package api
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"image"
 	"image/color"
 	"image/png"
 	"io"
 	"log"
 	"net/http"
+	"strconv"
+
+	"github.com/nfnt/resize"
 )
 
 type pixel struct {
@@ -33,12 +35,9 @@ func respond(w http.ResponseWriter, r *http.Request, status int, data interface{
 
 //HandleUploadImage ...
 func HandleUploadImage(w http.ResponseWriter, r *http.Request) {
-	fmt.Println(r.Header)
-	fmt.Println(r.ContentLength)
 	err := r.ParseMultipartForm(2000)
 	if err != nil {
 		body := ErrMessage{Message: err.Error(), Errors: nil}
-		fmt.Println("ParseMultipartForm", body)
 		respond(w, r, http.StatusBadRequest, body)
 		return
 	}
@@ -46,7 +45,6 @@ func HandleUploadImage(w http.ResponseWriter, r *http.Request) {
 	file, handler, err := r.FormFile("uploadfile")
 	if err != nil {
 		body := ErrMessage{Message: err.Error(), Errors: nil}
-		fmt.Println("FormFile", file, handler, body)
 		respond(w, r, http.StatusBadRequest, body)
 		return
 	}
@@ -60,29 +58,44 @@ func HandleUploadImage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	bounds := img.Bounds()
+	img = checkSize(img, 30, 30)
+	total := slidingWindow(img, 30, 30)
 
-	slidingWindow(img, 30, 30)
-
-	data := "File processed with success. File name: " + handler.Filename + " " + bounds.String()
+	data := "File processed with success. File name: " + handler.Filename + " " + bounds.String() + " total sliding=" +  strconv.Itoa(total)
 	body := SuccessMessage{Message: data}
 	respond(w, r, http.StatusOK, body)
 }
 
-func slidingWindow(img image.Image, width int, heigth int) {
+func checkSize(img image.Image, width int, heigth int) image.Image {
 	bounds := img.Bounds()
+	resizeX := 0
+	resizeY := 0
+	if bounds.Max.X < width {
+		resizeX = width
+	}
+	if bounds.Max.Y < heigth {
+		resizeY = heigth
+	}
 
-	// se a a resolução da imagem for menor que do parametro, fazer o resize.
-	// "github.com/nfnt/resize"
-	// img = resize.Resize(resX, resY, img, resize.Lanczos3)
+	if resizeX > 0 || resizeY > 0 {
+		img = resize.Resize(uint(resizeX), uint(resizeY), img, resize.Lanczos3)
+	}
+	return img
+}
 
-	for y := heigth; y <= bounds.Max.Y; y += heigth {
-		for x := width; x <= bounds.Max.X; x += width / 2 {
-			fmt.Println(x, y)
-			imgRect := image.Rect(0, 0, x, y)
+func slidingWindow(img image.Image, width int, heigth int) int {
+	bounds := img.Bounds()
+	total := 0
+
+	for y := 0; y <= bounds.Max.Y-heigth; y += heigth {
+		for x := 0; x <= bounds.Max.X-width; x += width / 2 {
+			imgRect := image.Rect(x, y, x+width, y+heigth)
 			imgNew := image.NewGray(imgRect)
 			go processingImage(imgNew)
+			total += 1
 		}
 	}
+	return total
 
 }
 

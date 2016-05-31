@@ -88,5 +88,5 @@ func TestUploadImageWithImageValid(t *testing.T) {
 
 	equals(t, http.StatusOK, w.Code)
 	equals(t, true, isJSON(w.Body.String()))
-	equals(t, "{\"message\":\"File processed with success. File name: img1.png (0,0)-(32,39)\"}\n", w.Body.String())
+	equals(t, "{\"message\":\"File processed with success. File name: img1.png (0,0)-(32,39) total sliding=1\"}\n", w.Body.String())
 }

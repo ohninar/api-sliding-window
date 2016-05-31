@@ -1,6 +1,7 @@
 install-dep-prod:
 	go get github.com/codegangsta/negroni
 	go get github.com/gorilla/mux
+	go get github.com/nfnt/resize
 
 run:
 	go run cmd/api/main.go
