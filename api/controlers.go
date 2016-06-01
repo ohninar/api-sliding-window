@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"image"
 	"image/color"
 	"image/png"
@@ -10,12 +11,18 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/nfnt/resize"
 )
 
 type pixel struct {
 	r, g, b, a uint8
+}
+
+type result struct {
+	idwindow int
+	char     string
 }
 
 func respond(w http.ResponseWriter, r *http.Request, status int, data interface{}) {
@@ -59,9 +66,14 @@ func HandleUploadImage(w http.ResponseWriter, r *http.Request) {
 
 	bounds := img.Bounds()
 	img = checkSize(img, 30, 30)
-	total := slidingWindow(img, 30, 30)
 
-	data := "File processed with success. File name: " + handler.Filename + " " + bounds.String() + " total sliding=" +  strconv.Itoa(total)
+	start := time.Now()
+	total, results := slidingWindow(img, 30, 30)
+	elapsed := time.Since(start)
+	log.Printf("slidingWindow took %s", elapsed)
+	fmt.Println(results)
+
+	data := "File processed with success. File name: " + handler.Filename + " " + bounds.String() + " total sliding=" + strconv.Itoa(total)
 	body := SuccessMessage{Message: data}
 	respond(w, r, http.StatusOK, body)
 }
@@ -83,28 +95,44 @@ func checkSize(img image.Image, width int, heigth int) image.Image {
 	return img
 }
 
-func slidingWindow(img image.Image, width int, heigth int) int {
+func slidingWindow(img image.Image, width int, heigth int) (total int, results []result) {
 	bounds := img.Bounds()
-	total := 0
+	c := make(chan string)
+	total = 0
 
 	for y := 0; y <= bounds.Max.Y-heigth; y += heigth {
 		for x := 0; x <= bounds.Max.X-width; x += width / 2 {
 			imgRect := image.Rect(x, y, x+width, y+heigth)
 			imgNew := image.NewGray(imgRect)
-			go processingImage(imgNew)
-			total += 1
+			go func() { c <- processingImage(imgNew) }()
+			total++
 		}
 	}
-	return total
+
+	for i := 0; i < total; i++ {
+		char := <-c
+		result := result{
+			idwindow: i,
+			char:     char,
+		}
+		results = append(results, result)
+	}
+	return total, results
 
 }
 
-func processingImage(img image.Image) []pixel {
+func processingImage(img image.Image) string {
 	imgGray := escalaCinza(img)
 	imgBeW := escalaPretoBranco(imgGray)
 	imgBack := checkBackground(imgBeW)
 	pixels := getPixels(imgBack)
-	return pixels
+
+	return sorter(pixels)
+}
+
+//TODO
+func sorter(pixels []pixel) string {
+	return "A"
 }
 
 func getPixels(img image.Image) []pixel {
