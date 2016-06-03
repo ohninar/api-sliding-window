@@ -65,13 +65,14 @@ func HandleUploadImage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	bounds := img.Bounds()
+	fmt.Println(bounds.String())
 	img = checkSize(img, 30, 30)
 
 	start := time.Now()
 	total, results := slidingWindow(img, 30, 30)
 	elapsed := time.Since(start)
 	log.Printf("slidingWindow took %s", elapsed)
-	fmt.Println(results)
+	fmt.Println("resultado:", results)
 
 	data := "File processed with success. File name: " + handler.Filename + " " + bounds.String() + " total sliding=" + strconv.Itoa(total)
 	body := SuccessMessage{Message: data}
@@ -122,17 +123,28 @@ func slidingWindow(img image.Image, width int, heigth int) (total int, results [
 }
 
 func processingImage(img image.Image) string {
-	imgGray := escalaCinza(img)
-	imgBeW := escalaPretoBranco(imgGray)
-	imgBack := checkBackground(imgBeW)
-	pixels := getPixels(imgBack)
-
-	return sorter(pixels)
+	fmt.Println(img.Bounds().String())
+	img = escalaCinza(img)
+	img = escalaPretoBranco(img)
+	img = checkBackground(img)
+	pixels := getPixels(img)
+	matrix := pixelToMatrix(pixels)
+	return sorterImage(matrix)
 }
 
-//TODO
-func sorter(pixels []pixel) string {
-	return "A"
+func pixelToMatrix(pixels []pixel) []float64 {
+	fmt.Println(len(pixels))
+	matrix := make([]float64, 900)
+
+	for i := 0; i < len(pixels); i++ {
+		matrix[i] = float64(pixels[i].r)
+	}
+	fmt.Println(len(matrix))
+	return matrix
+}
+
+func normalization(value uint8) float64 {
+	return float64(value) / 255.0
 }
 
 func getPixels(img image.Image) []pixel {
