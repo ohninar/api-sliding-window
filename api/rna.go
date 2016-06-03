@@ -1,7 +1,6 @@
 package api
 
 import (
-	"fmt"
 	"math"
 
 	"github.com/mitsuse/matrix-go/dense"
@@ -10,7 +9,7 @@ import (
 var (
 	//theta1 = dense.New(512, 901)(Theta1...)
 	//theta2 = dense.New(62, 513)(Theta2...)
-	limiar = 0.5
+	limiar = 0.1
 )
 
 /*
@@ -55,9 +54,7 @@ func sorterImage(matrix []float64) string {
 	newMatrix = multiplicationMatrix(newMatrix, transposeMatrix(theta2))
 	matrix = sigmoid(newMatrix)
 	newMatrix = setMatrix(matrix, 1, 62)
-	fmt.Println(newMatrix)
 	element, _, column := newMatrix.Max()
-	fmt.Println(element, column)
 	if checkLimiar(element, limiar) {
 		return represatation(column)
 	}

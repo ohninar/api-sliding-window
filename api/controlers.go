@@ -1,6 +1,7 @@
 package api
 
 import (
+	"os"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -104,7 +105,11 @@ func slidingWindow(img image.Image, width int, heigth int) (total int, results [
 	for y := 0; y <= bounds.Max.Y-heigth; y += heigth {
 		for x := 0; x <= bounds.Max.X-width; x += width / 2 {
 			imgRect := image.Rect(x, y, x+width, y+heigth)
-			imgNew := image.NewGray(imgRect)
+			imgNew := img.(interface {
+        			SubImage(r image.Rectangle) image.Image
+    			}).SubImage(imgRect)
+			//saveFile(strconv.Itoa(total) + "-sl-i.png", img) 
+			//saveFile(strconv.Itoa(total) + "-sl-f.png", imgNew) 
 			go func() { c <- processingImage(imgNew) }()
 			total++
 		}
@@ -123,23 +128,23 @@ func slidingWindow(img image.Image, width int, heigth int) (total int, results [
 }
 
 func processingImage(img image.Image) string {
-	fmt.Println(img.Bounds().String())
 	img = escalaCinza(img)
+        //saveFile("0-ec-f.png", img) 
 	img = escalaPretoBranco(img)
+        //saveFile("0-pb-f.png", img) 
 	img = checkBackground(img)
+        //saveFile("0-bg-f.png", img) 
 	pixels := getPixels(img)
 	matrix := pixelToMatrix(pixels)
 	return sorterImage(matrix)
 }
 
 func pixelToMatrix(pixels []pixel) []float64 {
-	fmt.Println(len(pixels))
 	matrix := make([]float64, 900)
 
 	for i := 0; i < len(pixels); i++ {
 		matrix[i] = float64(pixels[i].r)
 	}
-	fmt.Println(len(matrix))
 	return matrix
 }
 
@@ -148,13 +153,14 @@ func normalization(value uint8) float64 {
 }
 
 func getPixels(img image.Image) []pixel {
-
 	bounds := img.Bounds()
+	minX, minY := bounds.Min.X, bounds.Min.Y
+	maxX, maxY := bounds.Max.X, bounds.Max.Y
 	pixels := make([]pixel, bounds.Dx()*bounds.Dy())
 
 	i := 0
-	for x := 0; x < bounds.Max.X; x++ {
-		for y := 0; y < bounds.Max.Y; y++ {
+	for x := minX; x < maxX; x++ {
+		for y := minY; y < maxY; y++ {
 			r, g, b, a := img.At(x, y).RGBA()
 			pixels[i].r = uint8(r)
 			pixels[i].g = uint8(g)
@@ -163,18 +169,18 @@ func getPixels(img image.Image) []pixel {
 			i++
 		}
 	}
-
 	return pixels
 }
 
 func escalaCinza(img image.Image) image.Image {
 	bounds := img.Bounds()
-	w, h := bounds.Max.X, bounds.Max.Y
-	imgRect := image.Rect(0, 0, w, h)
+	minX, minY := bounds.Min.X, bounds.Min.Y
+	maxX, maxY := bounds.Max.X, bounds.Max.Y
+	imgRect := image.Rect(minX, minY, maxX, maxY)
 	gray := image.NewGray(imgRect)
 
-	for x := 0; x < w; x++ {
-		for y := 0; y < h; y++ {
+	for x := minX; x < maxX; x++ {
+		for y := minY; y < maxY; y++ {
 			oldColor := img.At(x, y)
 			grayColor := color.GrayModel.Convert(oldColor)
 			gray.Set(x, y, grayColor)
@@ -185,23 +191,24 @@ func escalaCinza(img image.Image) image.Image {
 
 func escalaPretoBranco(img image.Image) image.Image {
 	bounds := img.Bounds()
-	w, h := bounds.Max.X, bounds.Max.Y
-	imgRect := image.Rect(0, 0, w, h)
+	minX, minY := bounds.Min.X, bounds.Min.Y
+	maxX, maxY := bounds.Max.X, bounds.Max.Y
+	imgRect := image.Rect(minX, minY, maxX, maxY)
 	gray := image.NewGray(imgRect)
 	total := uint32(0)
 	media := uint32(0)
 
-	for x := 0; x < w; x++ {
-		for y := 0; y < h; y++ {
+	for x := minX; x < maxX; x++ {
+		for y := minY; y < maxY; y++ {
 			r, _, _, _ := img.At(x, y).RGBA()
 			total = total + r
 		}
 	}
 
-	media = total / uint32(w*h)
+	media = total / uint32((minX-maxX)*(minY-maxY))
 
-	for x := 0; x < w; x++ {
-		for y := 0; y < h; y++ {
+	for x := minX; x < maxX; x++ {
+		for y := minY; y < maxY; y++ {
 			r, _, _, _ := img.At(x, y).RGBA()
 
 			if r > media {
@@ -219,8 +226,9 @@ func escalaPretoBranco(img image.Image) image.Image {
 
 func checkBackground(img image.Image) image.Image {
 	bounds := img.Bounds()
-	w, h := bounds.Max.X, bounds.Max.Y
-	imgRect := image.Rect(0, 0, w, h)
+	minX, minY := bounds.Min.X, bounds.Min.Y
+	maxX, maxY := bounds.Max.X, bounds.Max.Y
+	imgRect := image.Rect(minX, minY, maxX, maxY)
 	gray := image.NewGray(imgRect)
 	changeBackground := false
 	total := uint32(0)
@@ -229,17 +237,17 @@ func checkBackground(img image.Image) image.Image {
 	totalBaixo := uint32(0)
 	totalCima := uint32(0)
 
-	for y := 0; y < h; y++ {
-		r, _, _, _ := img.At(0, y).RGBA()
+	for y := minY; y < maxY; y++ {
+		r, _, _, _ := img.At(minX, y).RGBA()
 		totalEsquerda = totalEsquerda + r
-		r, _, _, _ = img.At(w, y).RGBA()
+		r, _, _, _ = img.At(maxX, y).RGBA()
 		totalDireita = totalDireita + r
 	}
 
-	for x := 0; x < w; x++ {
-		r, _, _, _ := img.At(x, 0).RGBA()
+	for x := minX; x < maxX; x++ {
+		r, _, _, _ := img.At(x, minY).RGBA()
 		totalBaixo = totalBaixo + r
-		r, _, _, _ = img.At(x, h).RGBA()
+		r, _, _, _ = img.At(x, maxY).RGBA()
 		totalCima = totalCima + r
 	}
 
@@ -250,8 +258,8 @@ func checkBackground(img image.Image) image.Image {
 	}
 
 	if changeBackground {
-		for x := 0; x < w; x++ {
-			for y := 0; y < h; y++ {
+		for x := minX; x < maxX; x++ {
+			for y := minY; y < maxY; y++ {
 				r, _, _, _ := img.At(x, y).RGBA()
 
 				if r == 0 {
@@ -268,3 +276,17 @@ func checkBackground(img image.Image) image.Image {
 	}
 	return img
 }
+
+func saveFile(path string, file image.Image) {
+        f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE, 0666)
+        if err != nil {
+                fmt.Println("erro:", err)
+        }
+        defer f.Close()
+
+        err = png.Encode(f, file)
+        if err != nil {
+                fmt.Println("erro:", err)
+        }
+}
+
